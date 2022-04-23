@@ -67,19 +67,14 @@ bsmt_condition <- function(col) {
 transform_ordinal <- function(df) {
   df %>%
     mutate(LotShape = sapply(LotShape, switch,
-                             "Reg" = 1,
-                             "Slightly irregular" = 2,
-                             "Moderately Irregular" = 3,
-                             "Irregular"=4),
-           Utilities = sapply(Utilities, switch,
-                              "ELO" = 1,
-                              "NoSeWa" = 2,
-                              "NoSeWr" = 3,
-                              "AllPub" = 4),
+                             "Reg" = 0,
+                             "Slightly irregular" = 0,
+                             "Moderately Irregular" = 1,
+                             "Irregular" = 1),
            LandSlope = sapply(LandSlope, switch,
-                              "Gtl" = 1,
-                              "Mod"  = 2,
-                              "Sev" = 3),
+                              "Gtl" = 0,
+                              "Mod"  = 1,
+                              "Sev" = 1),
            ExterQual = ordinal_condition(ExterQual),
            ExterCond = ordinal_condition(ExterCond),
            BsmtQual = ordinal_condition(BsmtQual),
@@ -103,15 +98,21 @@ transform_ordinal <- function(df) {
                                "Sal" = 3),
            FireplaceQu = ordinal_condition(FireplaceQu),
            GarageFinish = ifelse(GarageFinish == "Unf", 1,
-                          ifelse(GarageFinish == "Rough Finished", 2,
-                          ifelse(GarageFinish == "Finished", 3, NA))),
+                          ifelse(GarageFinish == "RFn", 2,
+                          ifelse(GarageFinish == "Fin", 3, NA))),
            GarageQual = ordinal_condition(GarageQual),
-           GarageCond = ordinal_condition(GarageCond),
-           PoolQC = ordinal_condition(PoolQC)
-           )
+           GarageCond = ordinal_condition(GarageCond))
 }
 
 train <- transform_ordinal(train)
 test <- transform_ordinal(test)
 
+combine_cols <- function(df) {
+  df %>%
+    mutate(BsmtFinSF = BsmtFinSF1 + BsmtFinSF2,
+           Porch = OpenPorchSF + EnclosedPorch + X3SsnPorch + ScreenPorch) %>%
+    select(-Id, -Utilities, -BsmtFinSF1, -BsmtFinSF2, -PoolQC, -OpenPorchSF, -EnclosedPorch, -X3SsnPorch, -ScreenPorch)
+}
 
+train <- combine_cols(train)
+test <- combine_cols(test)
