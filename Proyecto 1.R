@@ -72,11 +72,11 @@ transform_ordinal <- function(df) {
                              "Reg" = 0,
                              "Slightly irregular" = 0,
                              "Moderately Irregular" = 1,
-                             "Irregular" = 1),
+                             "Irregular" = 1), #Se aproxima porque Reg e Irregular tenian casi todos los datos.
            LandSlope = sapply(LandSlope, switch,
                               "Gtl" = 0,
                               "Mod"  = 1,
-                              "Sev" = 1),
+                              "Sev" = 1), #Se aproxima tambien por cantidad de datos
            ExterQual = ordinal_condition(ExterQual),
            ExterCond = ordinal_condition(ExterCond),
            BsmtQual = ordinal_condition(BsmtQual),
@@ -97,7 +97,7 @@ transform_ordinal <- function(df) {
                                "Maj1" = 3,
                                "Maj2" = 3,
                                "Sev" = 3,
-                               "Sal" = 3),
+                               "Sal" = 3), #Se aproxima por cantidad de datos
            FireplaceQu = ordinal_condition(FireplaceQu),
            GarageFinish = ifelse(GarageFinish == "Unf", 1,
                                  ifelse(GarageFinish == "RFn", 2,
@@ -112,8 +112,13 @@ test <- transform_ordinal(test)
 combine_cols <- function(df) {
   df %>%
     mutate(BsmtFinSF = BsmtFinSF1 + BsmtFinSF2,
-           Porch = OpenPorchSF + EnclosedPorch + X3SsnPorch + ScreenPorch) %>%
-    select(-Id, -Utilities, -BsmtFinSF1, -BsmtFinSF2, -PoolQC, -OpenPorchSF, -EnclosedPorch, -X3SsnPorch, -ScreenPorch)
+           BsmtFinRating = ifelse(BsmtFinSF2 > 0, 
+                                  ((BsmtFinType1*BsmtFinSF1) + (BsmtFinType2*BsmtFinSF2)) / (BsmtFinSF1 + BsmtFinSF2),
+                                  BsmtFinType1),
+           Porch = OpenPorchSF + EnclosedPorch + X3SsnPorch + ScreenPorch,
+           FlrSF = X1stFlrSF + X2ndFlrSF) %>%
+    select(-Id, -Utilities, -BsmtFinSF1, -BsmtFinSF2, -BsmtFinType1, -BsmtFinType2, -PoolQC, 
+           -OpenPorchSF, -EnclosedPorch, -X3SsnPorch, -ScreenPorch)
 }
 
 
@@ -124,15 +129,11 @@ bool_transform <- function(df) {
   df %>%
     mutate(Street = ifelse(Street == "Grvl",1,
                            ifelse(Street== "Pave", 0, NA)),
-           Alley= ifelse(Alley== "Grvl",1,
-                         ifelse(Alley== "Pave", 0, NA)),
+           Alley= ifelse(is.na(Alley), 0, 1),
            CentralAir= ifelse(CentralAir=="Y", 1, 
                               ifelse(CentralAir=="N",0, NA)),
            PoolArea= ifelse(PoolArea!=0, 1,
-                            ifelse(PoolArea==0, 0, NA)),
-           MiscVal= ifelse(MiscVal!=0, 1,
-                            ifelse(MiscVal==0, 0, NA))
-           
+                            ifelse(PoolArea==0, 0, NA))
     )
 }
 
@@ -159,19 +160,20 @@ table(train$RoofStyle, train$Foundation)
 train_numericas2 <- train[,sapply(train, is.numeric)]
 multi.hist(train_numericas2, global = FALSE)
 
-#se encuentran los continuos y ordinales 
-vector_continuas_numericas2 <- c(1:2,7:21,23:31,33:44,47:51)
+#se encuentran los continuos
+vector_continuas_numericas2 <- c(1, 2, 11, 17, 18, 21, 22, 24, 39, 42, 47, 48, 50, 51)
 train_continuas_numericas2 <- train_numericas2[,vector_continuas_numericas2]
 multi.hist(train_continuas_numericas2, global = FALSE, bcol = 'pink')
 
-m<-cor(train_continuas_numericas2, use="complete.obs")
+m <- cor(train_numericas2, use="complete.obs")
 
+par(mfrow=c(1,1))
 #con todas las variables y ordenadas por mayot cor 
 corrplot(m, addCoef.col = 'black', type = 'lower', number.cex= 0.5, tl.cex=0.5, cl.pos='n', 
          tl.srt = 1, order = "FPC")
 
 #solo con la variable saleprice para analizar las relaciones de las demas var con ella 
-corrplot(m[1:43, 41, drop=FALSE], addCoef.col = 'black', type = 'lower', number.cex= 0.5, tl.cex=0.5, cl.pos='n', 
+corrplot(m[c(1:46, 48:51), 47, drop=FALSE], addCoef.col = 'black', type = 'lower', number.cex= 0.5, tl.cex=0.5, cl.pos='n', 
          tl.srt = 1)
 
 
@@ -181,22 +183,18 @@ train_discretas_numericas2 <- train_numericas2[,-vector_continuas_numericas2]
 
 #se juntan los cualitativos bool y los nominales
 train_factor <- train[,sapply(train, is.factor)]
-cualitativas_nominales<- cbind(train_discretas_numericas2,train_factor)
+cualitativas_discretas <- cbind(train_discretas_numericas2, train_factor)
 
 #barplots2
-par(mfrow=c(6,6))
-for(c in colnames(cualitativas_nominales)) {
-  barplot(table(cualitativas_nominales[, c]), main = c)
+par(mfrow=c(5,6))
+for(c in colnames(cualitativas_discretas)) {
+  barplot(table(cualitativas_discretas[, c]), main = c)
 }
 
 
 #se crean los boxplots 
-par(mfrow=c(4,3))
-for(c in colnames(cualitativas_nominales[,1:12])) {
-  boxplot(cualitativas_nominales[, c], main = c,col = rgb(1, 0, 0, alpha = 0.4))
-    }
-
-par(mfrow=c(4,3))
-for(c in colnames(cualitativas_nominales[,13:23])) {
-  boxplot(cualitativas_nominales[, c], main = c, global=FALSE,col = rgb(1, 0, 0, alpha = 0.4))
+par(mfrow=c(5,4))
+for(c in colnames(cualitativas_discretas)) {
+  boxplot(train$SalePrice ~ cualitativas_discretas[, c],
+          main = c, col = rgb(1, 0, 0, alpha = 0.4))
 }
