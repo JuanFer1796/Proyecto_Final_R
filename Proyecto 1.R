@@ -9,8 +9,6 @@ setwd("~/GitHub/Proyecto_Final_R")
 train <- read.csv("train.csv", stringsAsFactors = TRUE)
 test <- read.csv("test.csv", stringsAsFactors = TRUE)
 
-
-
 #factorizacion de numericas
 train <- train %>%
   mutate(MSSubClass = as.factor(MSSubClass))
@@ -46,9 +44,10 @@ for(c in colnames(train_discretas_numericas)) {
 }
 
 
-#1.c. Presentar por lo menos 3 tablas de contingencia que se relacionen con el target del caso.
-#Transformacion de datos 
 
+#1.c. Presentar por lo menos 3 tablas de contingencia que se relacionen con el target del caso.
+
+#Condiciones ordinales utilizadas por muchas variables 
 ordinal_condition <- function(col) {
   ifelse(col == "Po", 1,
          ifelse(col == "Fa", 2,
@@ -109,6 +108,7 @@ transform_ordinal <- function(df) {
 train <- transform_ordinal(train)
 test <- transform_ordinal(test)
 
+#Se combinan y se eliminan columnas
 combine_cols <- function(df) {
   df %>%
     mutate(BsmtFinSF = BsmtFinSF1 + BsmtFinSF2,
@@ -124,7 +124,8 @@ combine_cols <- function(df) {
 
 train <- combine_cols(train)
 test <- combine_cols(test)
-#funcion para convertir a bool 
+
+#Funcion para convertir a bool 
 bool_transform <- function(df) {
   df %>%
     mutate(Street = ifelse(Street == "Grvl",1,
@@ -140,8 +141,8 @@ bool_transform <- function(df) {
 train <- bool_transform(train)
 test <- bool_transform(test)
 
+#Tres tablas de contingencia
 
-#Tres tablas de contingencia 
 #estilo de casa y tipo de venta 
 table(train$HouseStyle, train$SaleType)
 
@@ -152,9 +153,8 @@ table(train$MSSubClass, train$MSZoning)
 table(train$RoofStyle, train$Foundation)
 
 
-#1.d. ¿Que relaciones identifican entre las variables que podran afectar en el precio de las casas?
 
-#Condiciones usadas por muchas variables ordinales
+#1.d. ¿Que relaciones identifican entre las variables que podran afectar en el precio de las casas?
 
 #se crea un nuevo df para los numericos de la tabla 
 train_numericas2 <- train[,sapply(train, is.numeric)]
@@ -163,36 +163,68 @@ multi.hist(train_numericas2, global = FALSE)
 #se encuentran los continuos
 vector_continuas_numericas2 <- c(1, 2, 11, 17, 18, 21, 22, 24, 39, 42, 47, 48, 50, 51)
 train_continuas_numericas2 <- train_numericas2[,vector_continuas_numericas2]
-multi.hist(train_continuas_numericas2, global = FALSE, bcol = 'pink')
 
 m <- cor(train_numericas2, use="complete.obs")
 
 par(mfrow=c(1,1))
 #con todas las variables y ordenadas por mayot cor 
-corrplot(m, addCoef.col = 'black', type = 'lower', number.cex= 0.5, tl.cex=0.5, cl.pos='n', 
-         tl.srt = 1, order = "FPC")
+corrplot(m, addCoef.col = 'black', number.cex= 0.5, tl.cex=0.5, cl.pos='n', 
+          order = "FPC")
 
 #solo con la variable saleprice para analizar las relaciones de las demas var con ella 
 corrplot(m[c(1:46, 48:51), 47, drop=FALSE], addCoef.col = 'black', type = 'lower', number.cex= 0.5, tl.cex=0.5, cl.pos='n', 
          tl.srt = 1)
 
-
 #df para discretas 
 train_discretas_numericas2 <- train_numericas2[,-vector_continuas_numericas2]
-
 
 #se juntan los cualitativos bool y los nominales
 train_factor <- train[,sapply(train, is.factor)]
 cualitativas_discretas <- cbind(train_discretas_numericas2, train_factor)
 
-#barplots2
+#se crean los boxplots 
+par(mfrow=c(5,4))
+for(c in colnames(cualitativas_discretas)) {
+  boxplot(train$SalePrice ~ cualitativas_discretas[, c],
+          main = c, col = rgb(1, 0, 0, alpha = 0.4))
+}
+
+num_high_cor <- c("OverralQual", "BsmtQual", "ExterQual", "GarageCars", "YearBuilt",
+                  "KitchenQual", "TotalBsmtSF", "BsmtFinRating", "YearRemodAdd", "FlrSF",
+                  "GrLivArea", "GarageFinish", "FullBath", "HeatingQC", "MasVnrArea",
+                  "BsmtExposure")
+
+cual_dif_sig <- c("MSZoning", "Neighborhood", "MasVnrType", "Electrical",
+                  "GarageType", "SaleType")
+
+#1.f.1. ¿Existe algun tipo de sesgo en una variable que pueda afectar el precio?
+#Histogramas para las continuas
+multi.hist(train_continuas_numericas2, global = FALSE, bcol = 'pink')
+
+#Graficos de barras para las discretas y cualitativas
 par(mfrow=c(5,6))
 for(c in colnames(cualitativas_discretas)) {
   barplot(table(cualitativas_discretas[, c]), main = c)
 }
 
 
-#se crean los boxplots 
+#1.f.2. ¿Cuantos NAs hay en cada variable? ¿Pueden afectar al modelo?
+train_og <- read.csv("train.csv", stringsAsFactors = TRUE)
+colSums(is.na(train_og))
+colSums(is.na(train))
+
+#1.f.3. ¿Existen variables con relacion de mayor grado?
+par(mfrow=c(4,4))
+for(c in colnames(train_numericas2)) {
+  plot(train_numericas2[, c], train_numericas2$SalePrice, main = c)
+}
+
+#1.f.4. ¿Cuales se deben eliminar debido a la multicolinealidad?
+par(mfrow=c(1,1))
+corrplot(m, addCoef.col = 'black', number.cex= 0.5, tl.cex=0.5, cl.pos='n', 
+         order = "FPC")
+
+#1.f.5. ¿Que variables es necesario dummificar?
 par(mfrow=c(5,4))
 for(c in colnames(cualitativas_discretas)) {
   boxplot(train$SalePrice ~ cualitativas_discretas[, c],
