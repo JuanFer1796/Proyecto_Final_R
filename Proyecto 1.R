@@ -2,6 +2,9 @@ library(tidyverse)
 library(psych)
 library(ggthemes)
 library(corrplot)
+library(weights)
+library(rpart)
+library(rpart.plot)
 
 setwd("D:/Google Drive/UVG/V Semestre/Data Mining/Proyecto 1/Proyecto_Final_R")
 setwd("~/GitHub/Proyecto_Final_R")
@@ -18,13 +21,13 @@ test <- test %>%
 
 
 
-#1.a. ¿Que tipos de datos identificamos?
+#1.a. ?Que tipos de datos identificamos?
 str(train)
 
 
 
 
-#1.b. ¿Cual es la distribucion de las variables univariadas?
+#1.b. ?Cual es la distribucion de las variables univariadas?
 
 #revision de todas las variables numericas
 train_numericas <- train[,sapply(train, is.numeric)]
@@ -154,7 +157,7 @@ table(train$RoofStyle, train$Foundation)
 
 
 
-#1.d. ¿Que relaciones identifican entre las variables que podran afectar en el precio de las casas?
+#1.d. ?Que relaciones identifican entre las variables que podran afectar en el precio de las casas?
 
 #se crea un nuevo df para los numericos de la tabla 
 train_numericas2 <- train[,sapply(train, is.numeric)]
@@ -189,7 +192,7 @@ for(c in colnames(cualitativas_discretas)) {
           main = c, col = rgb(1, 0, 0, alpha = 0.4))
 }
 
-num_high_cor <- c("OverralQual", "BsmtQual", "ExterQual", "GarageCars", "YearBuilt",
+num_high_cor <- c("OverallQual", "BsmtQual", "ExterQual", "GarageCars", "YearBuilt",
                   "KitchenQual", "TotalBsmtSF", "BsmtFinRating", "YearRemodAdd", "FlrSF",
                   "GrLivArea", "GarageFinish", "FullBath", "HeatingQC", "MasVnrArea",
                   "BsmtExposure")
@@ -197,7 +200,7 @@ num_high_cor <- c("OverralQual", "BsmtQual", "ExterQual", "GarageCars", "YearBui
 cual_dif_sig <- c("MSZoning", "Neighborhood", "MasVnrType", "Electrical",
                   "GarageType", "SaleType")
 
-#1.f.1. ¿Existe algun tipo de sesgo en una variable que pueda afectar el precio?
+#1.f.1. ?Existe algun tipo de sesgo en una variable que pueda afectar el precio?
 #Histogramas para las continuas
 multi.hist(train_continuas_numericas2, global = FALSE, bcol = 'pink')
 
@@ -208,25 +211,132 @@ for(c in colnames(cualitativas_discretas)) {
 }
 
 
-#1.f.2. ¿Cuantos NAs hay en cada variable? ¿Pueden afectar al modelo?
+#1.f.2. ?Cuantos NAs hay en cada variable? ?Pueden afectar al modelo?
 train_og <- read.csv("train.csv", stringsAsFactors = TRUE)
 colSums(is.na(train_og))
 colSums(is.na(train))
 
-#1.f.3. ¿Existen variables con relacion de mayor grado?
+#1.f.3. ?Existen variables con relacion de mayor grado?
 par(mfrow=c(4,4))
 for(c in colnames(train_numericas2)) {
   plot(train_numericas2[, c], train_numericas2$SalePrice, main = c)
 }
 
-#1.f.4. ¿Cuales se deben eliminar debido a la multicolinealidad?
+#1.f.4. ?Cuales se deben eliminar debido a la multicolinealidad?
 par(mfrow=c(1,1))
 corrplot(m, addCoef.col = 'black', number.cex= 0.5, tl.cex=0.5, cl.pos='n', 
          order = "FPC")
 
-#1.f.5. ¿Que variables es necesario dummificar?
+#1.f.5. ?Que variables es necesario dummificar?
 par(mfrow=c(5,4))
 for(c in colnames(cualitativas_discretas)) {
   boxplot(train$SalePrice ~ cualitativas_discretas[, c],
           main = c, col = rgb(1, 0, 0, alpha = 0.4))
 }
+
+
+cual_dif_sig <- c("MSZoning", "Neighborhood", "MasVnrType", "Electrical",
+                  "GarageType", "SaleType")
+
+
+#Funcion para convertir a bool 
+dummy_set_train <- function(df) {
+  MSZoning <- as.data.frame(dummify(df$MSZoning))
+  MSZoning %>% rename_with(.fn = ~ paste0("Zoning_", .x)) -> MSZoning
+  
+  Neighborhood <- as.data.frame(dummify(df$Neighborhood))
+  Neighborhood %>% rename_with(.fn = ~ paste0("Neighborhood_", .x)) -> Neighborhood
+  
+  MasVnrType <- as.data.frame(dummify(df$MasVnrType))
+  MasVnrType %>% rename_with(.fn = ~ paste0("MasVnrType_", .x)) -> MasVnrType
+  
+  Electrical <- as.data.frame(dummify(df$Electrical))
+  Electrical %>% rename_with(.fn = ~ paste0("Electrical_", .x)) -> Electrical
+  Electrical <- Electrical %>% select(Electrical$Electrical_SBrkr)
+  
+  GarageType <- as.data.frame(dummify(df$GarageType))
+  GarageType %>% rename_with(.fn = ~ paste0("GarageType_", .x)) -> GarageType
+  
+  SaleType <- as.data.frame(dummify(df$SaleType))
+  SaleType %>% rename_with(.fn = ~ paste0("SaleType_", .x)) -> SaleType
+  SaleType <- SaleType %>% select(Electrical$SaleType_New) 
+  
+  df <- df %>% 
+    select(-MSZoning, -Neighborhood, -MasVnrType, -Electrical, -GarageType, -SaleType)
+  
+  df <- df %>% select(num_high_cor, SalePrice)
+  
+  df <- cbind(df, MSZoning, Neighborhood, MasVnrType, 
+              Electrical, GarageType, SaleType)
+  
+}
+
+dummy_set_test <- function(df) {
+  MSZoning <- as.data.frame(dummify(df$MSZoning))
+  MSZoning %>% rename_with(.fn = ~ paste0("Zoning_", .x)) -> MSZoning
+  
+  Neighborhood <- as.data.frame(dummify(df$Neighborhood))
+  Neighborhood %>% rename_with(.fn = ~ paste0("Neighborhood_", .x)) -> Neighborhood
+  
+  MasVnrType <- as.data.frame(dummify(df$MasVnrType))
+  MasVnrType %>% rename_with(.fn = ~ paste0("MasVnrType_", .x)) -> MasVnrType
+  
+  Electrical <- as.data.frame(dummify(df$Electrical))
+  Electrical %>% rename_with(.fn = ~ paste0("Electrical_", .x)) -> Electrical
+  Electrical <- Electrical %>% select(Electrical$Electrical_SBrkr)
+  
+  GarageType <- as.data.frame(dummify(df$GarageType))
+  GarageType %>% rename_with(.fn = ~ paste0("GarageType_", .x)) -> GarageType
+  
+  SaleType <- as.data.frame(dummify(df$SaleType))
+  SaleType %>% rename_with(.fn = ~ paste0("SaleType_", .x)) -> SaleType
+  SaleType <- SaleType %>% select(Electrical$SaleType_New) 
+  
+  df <- df %>% 
+    select(-MSZoning, -Neighborhood, -MasVnrType, -Electrical, -GarageType, -SaleType)
+  
+  df <- df %>% select(num_high_cor)
+  
+  df <- cbind(df, MSZoning, Neighborhood, MasVnrType, 
+              Electrical, GarageType, SaleType)
+  
+}
+
+train <- dummy_set_train(train)
+test <- dummy_set_test(test)
+
+#Limpieza Final
+train <- train %>% mutate(across(.cols=where(is.integer), .fns=as.numeric))
+train <- train %>% 
+  mutate_if(is.numeric, ~replace_na(.,mean(., na.rm = TRUE)))
+test <- test %>% mutate(across(.cols=where(is.integer), .fns=as.numeric))
+test <- test %>% 
+  mutate_if(is.numeric, ~replace_na(.,mean(., na.rm = TRUE)))
+
+# Modelo Lineal 1
+lm_modelo <- lm(SalePrice ~ ., data=train, na.action = "na.exclude")
+lm_modelo$coefficients
+summary(lm_modelo)
+test <- test %>% 
+  mutate_if(is.numeric, ~replace_na(.,mean(., na.rm = TRUE)))
+prediccion1 <- as.data.frame(predict(lm_modelo, test, na.action = "na.pass"))
+write.csv(prediccion1, "Prediccion1.csv")
+
+#MOdelo de Arbol
+grade_model <- rpart(formula = SalePrice ~ ., 
+                     data = train, 
+                     method = "anova")
+
+# Look at the model output                      
+print(grade_model)
+
+# Plot the tree model
+par(mfrow=c(1,1))
+rpart.plot(x = grade_model, yesno = 2, type = 0, extra = 0)
+
+# Generate predictions on a test set
+prediccion2 <- predict(object = grade_model,   # model object 
+                newdata = test)  # test dataset
+
+prediccion2 <- as.data.frame(as.numeric(prediccion2))
+write.csv(prediccion2, "Prediccion2.csv")
