@@ -5,6 +5,7 @@ library(corrplot)
 library(weights)
 library(rpart)
 library(rpart.plot)
+library(glmnet)
 
 setwd("D:/Google Drive/UVG/V Semestre/Data Mining/Proyecto 1/Proyecto_Final_R")
 setwd("~/GitHub/Proyecto_Final_R")
@@ -317,12 +318,10 @@ test <- test %>%
 lm_modelo <- lm(SalePrice ~ ., data=train, na.action = "na.exclude")
 lm_modelo$coefficients
 summary(lm_modelo)
-test <- test %>% 
-  mutate_if(is.numeric, ~replace_na(.,mean(., na.rm = TRUE)))
 prediccion1 <- as.data.frame(predict(lm_modelo, test, na.action = "na.pass"))
 write.csv(prediccion1, "Prediccion1.csv")
 
-#MOdelo de Arbol
+#Modelo de Arbol
 grade_model <- rpart(formula = SalePrice ~ ., 
                      data = train, 
                      method = "anova")
@@ -340,3 +339,13 @@ prediccion2 <- predict(object = grade_model,   # model object
 
 prediccion2 <- as.data.frame(as.numeric(prediccion2))
 write.csv(prediccion2, "Prediccion2.csv")
+
+#Modelo Regression de Lasso
+cv_model <- cv.glmnet(as.matrix(train %>% select(-SalePrice)), train$SalePrice, alpha = 1)
+
+#find optimal lambda value that minimizes test MSE
+best_lambda <- cv_model$lambda.min
+
+best_model <- glmnet(as.matrix(train %>% select(-SalePrice)), train$SalePrice, alpha = 1, lambda = best_lambda)
+prediccion3 <- as.data.frame(predict(best_model, s = best_lambda, newx = as.matrix(test)))
+write.csv(prediccion3, "Prediccion3.csv")
